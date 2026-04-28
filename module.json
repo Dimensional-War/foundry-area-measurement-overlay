@@ -1,0 +1,28 @@
+{
+  "id": "area-measurement-overlay",
+  "title": "Area Measurement Overlay",
+  "description": "Displays custom area measurements on templates based on configurable square footage",
+  "version": "1.0.0",
+  "compatibility": {
+    "minimum": "12",
+    "verified": "12"
+  },
+  "authors": [
+    {
+      "name": "Your Name"
+    }
+  ],
+  "esmodules": [
+    "scripts/area-measurement.js"
+  ],
+  "styles": [
+    "styles/area-measurement.css"
+  ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ]
+}

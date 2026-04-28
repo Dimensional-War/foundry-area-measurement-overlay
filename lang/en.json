@@ -1,0 +1,26 @@
+{
+  "area-measurement-overlay": {
+    "settings": {
+      "areaLabel": {
+        "name": "Area Label",
+        "hint": "The label to display for area measurements (e.g., 'area', 'zone', 'sector')"
+      },
+      "squareUnitsPerArea": {
+        "name": "Square Units per Area",
+        "hint": "How many square units equals one area? (e.g., 225 for a 15×15 grid = 1 area)"
+      },
+      "enabled": {
+        "name": "Enable Area Overlay",
+        "hint": "Show area measurements on templates"
+      },
+      "textColor": {
+        "name": "Text Color",
+        "hint": "Color for the area measurement text (CSS color value)"
+      },
+      "fontSize": {
+        "name": "Font Size",
+        "hint": "Font size for the area measurement text (in pixels)"
+      }
+    }
+  }
+}
