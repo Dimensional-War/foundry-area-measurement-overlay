@@ -5,7 +5,7 @@ A Foundry VTT module that displays custom area measurements on templates based o
 ## Features
 
 - **Custom Area Labels**: Configure the label (e.g., "area", "zone", "sector")
-- **Configurable Units**: Define how many square units (based on your scene's grid units) equals one area
+- **Simple Configuration**: Just enter the side length - the module squares it automatically
 - **Automatic Calculation**: Calculates area based on template shape (circle, rectangle, cone, ray)
 - **Visual Overlay**: Displays area units directly on templates
 - **Customizable Appearance**: Adjust text color and font size
@@ -33,14 +33,24 @@ Access module settings in **Game Settings → Module Settings → Area Measureme
 ### Settings
 
 - **Area Label**: The text label for your area units (default: "area")
-- **Square Units per Area**: How many square units (in your scene's grid units) equals one area (default: 225 for 15×15 = 1 area)
+- **Side Length per Area**: The side length in scene units (feet, meters, etc.) that equals one area. Enter 15 to make a 15×15 ft template = 1 area. Enter 10 to make a 10×10 ft template = 1 area. (default: 15)
 - **Enable Area Overlay**: Toggle the overlay on/off (default: enabled)
+- **Visibility Mode**: Choose when to show the area measurement (default: "Always Visible")
+  - **Always Visible**: Area measurements always visible on all templates
+  - **Only While Editing Templates**: Area measurements only visible when the template measurement tool is active
+- **Rounding Mode**: How to round area values when they are not whole numbers (default: "Floor (round down)")
+  - **Round (nearest)**: Standard rounding to the nearest value (1 decimal place)
+  - **Floor (round down)**: Always rounds down (1 decimal place)
+  - **Ceil (round up)**: Always rounds up (1 decimal place)
+  - **Trunc (remove decimal)**: Removes the decimal part entirely, showing only whole numbers (e.g., 2.9 becomes 2)
 - **Text Color**: CSS color for the overlay text (default: #FFFFFF white)
 - **Font Size**: Size of the overlay text in pixels (default: 24px)
 
 ## Usage
 
-1. Configure your settings (e.g., set "Square Units per Area" to 225 if 15×15 grid units = 1 area)
+1. Configure your settings:
+   - **To make a 15×15 ft template = 1 area:** Set "Side Length per Area" to **15**
+   - **To make a 10×10 ft template = 1 area:** Set "Side Length per Area" to **10**
 2. Place any template on the canvas (circle, cone, rectangle, or ray)
 3. The module automatically calculates and displays the area units
 
@@ -48,14 +58,14 @@ Access module settings in **Game Settings → Module Settings → Area Measureme
 
 **Configuration:**
 
-- Square Units per Area: 225 (15 × 15 grid units)
+- Side Length per Area: **15** (this makes 15 × 15 ft = 1 area)
 - Area Label: "area"
 
 **Result:**
 
-- 15×15 grid unit template → displays "1 area"
-- 30×30 grid unit template → displays "4 areas"
-- 45×45 grid unit template → displays "9 areas"
+- 15×15 ft template → displays "1 area"
+- 30×30 ft template → displays "4 areas" (because 30×30 = 4 times 15×15)
+- 45×45 ft template → displays "9 areas" (because 45×45 = 9 times 15×15)
 
 ## How It Works
 
@@ -63,8 +73,8 @@ The module:
 
 1. Hooks into Foundry's template rendering
 2. Calculates the template's area in square units (based on your scene's grid distance setting)
-3. Divides by your configured "Square Units per Area" value
-4. Overlays the result on the template
+3. Squares your configured side length to get the area per unit (e.g., 15 ft → 225 square ft)
+4. Divides the template area by this value and displays the result
 
 ### Supported Template Types
 

@@ -6,12 +6,20 @@
         "hint": "The label to display for area measurements (e.g., 'area', 'zone', 'sector')"
       },
       "squareUnitsPerArea": {
-        "name": "Square Units per Area",
-        "hint": "How many square units equals one area? (e.g., 225 for a 15×15 grid = 1 area)"
+        "name": "Side Length per Area",
+        "hint": "The side length in scene units that equals one area. For example, enter 15 to make a 15×15 ft template = 1 area, or enter 10 to make a 10×10 ft template = 1 area."
       },
       "enabled": {
         "name": "Enable Area Overlay",
         "hint": "Show area measurements on templates"
+      },
+      "visibility": {
+        "name": "Visibility Mode",
+        "hint": "When to show the area measurement overlay. 'Always Visible' shows measurements on all templates. 'Only While Editing Templates' shows measurements only when the template tool is active."
+      },
+      "roundingMode": {
+        "name": "Rounding Mode",
+        "hint": "How to round area values. Round (nearest) rounds to the nearest value, Floor (round down) always rounds down, Ceil (round up) always rounds up, Trunc (remove decimal) removes the decimal entirely showing only whole numbers."
       },
       "textColor": {
         "name": "Text Color",
