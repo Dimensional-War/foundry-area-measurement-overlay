@@ -20,5 +20,8 @@
       "name": "English",
       "path": "lang/en.json"
     }
-  ]
+  ],
+  "url": "this gets replaced by the build script",
+  "manifest": "this gets replaced by the build script",
+  "download": "this gets replaced by the build script"
 }
