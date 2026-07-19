@@ -108,16 +108,57 @@ class AreaMeasurementOverlay {
   static calculateAreaSquareUnits(template) {
     const gridSize = canvas.scene.grid.size;
     const gridDistance = canvas.scene.grid.distance;
-    const gridUnits = canvas.scene.grid.units;
+    const squareUnitsPerGridSquare = Math.pow(gridDistance, 2);
+
+    // Preferred mode: count touched grid squares so overlay matches what users see.
+    const touchedSquares = this.countTouchedGridSquares(template);
+    if (Number.isFinite(touchedSquares) && touchedSquares >= 0) {
+      return touchedSquares * squareUnitsPerGridSquare;
+    }
+
+    const sideLength = game.settings.get(this.MODULE_ID, "squareUnitsPerArea");
+    const templateData = template?.document ?? template;
+
+    // Ray normalization: Foundry defaults ray width to one grid unit. For area-mode
+    // workflows, treat default-width rays as "sideLength" thick so a 15' ray maps
+    // to 1 area when sideLength=15.
+    if (templateData?.t === "ray") {
+      const rawWidth = Number(templateData.width ?? 0);
+      const isDefaultWidth =
+        !rawWidth || Math.abs(rawWidth - gridDistance) < 1e-6;
+      const effectiveWidth = isDefaultWidth ? sideLength : rawWidth;
+      return (
+        Math.max(0, Number(templateData.distance ?? 0)) *
+        Math.max(0, effectiveWidth)
+      );
+    }
+
+    // Prefer rendered shape geometry for accurate area on rays, rotated templates,
+    // and any non-axis-aligned placement. Convert pixel area -> scene square units.
+    const shapeAreaPixels = this.getTemplateShapeAreaPixels(template);
+    if (shapeAreaPixels > 0 && gridSize > 0 && gridDistance > 0) {
+      const pixelsPerSceneUnit = gridSize / gridDistance;
+      return shapeAreaPixels / Math.pow(pixelsPerSceneUnit, 2);
+    }
 
     let areaInGridSquares = 0;
 
-    switch (template.t) {
+    switch (templateData.t) {
       case "circle":
-      case "cone":
         // Circular area: π * r²
-        const radiusInGrids = template.distance / gridDistance;
+        const radiusInGrids = templateData.distance / gridDistance;
         areaInGridSquares = Math.PI * Math.pow(radiusInGrids, 2);
+        break;
+
+      case "cone":
+        // Cone area is a sector of a circle: (angle/360) * π * r²
+        // Default Foundry cone angle is typically 53.13 if unspecified.
+        const coneRadiusInGrids = templateData.distance / gridDistance;
+        const coneAngle = Number(templateData.angle ?? 53.13);
+        areaInGridSquares =
+          (Math.max(0, coneAngle) / 360) *
+          Math.PI *
+          Math.pow(coneRadiusInGrids, 2);
         break;
 
       case "rect":
@@ -126,15 +167,16 @@ class AreaMeasurementOverlay {
         // We need to divide by √2 to get the side length
         let widthInGrids, heightInGrids;
 
-        if (!template.width || template.width === 0) {
+        if (!templateData.width || templateData.width === 0) {
           // Square template - distance is diagonal, convert to side length
-          const sideInGrids = template.distance / gridDistance / Math.sqrt(2);
+          const sideInGrids =
+            templateData.distance / gridDistance / Math.sqrt(2);
           widthInGrids = sideInGrids;
           heightInGrids = sideInGrids;
         } else {
           // Rectangular template - use distance and width
-          widthInGrids = template.distance / gridDistance;
-          heightInGrids = template.width / gridDistance;
+          widthInGrids = templateData.distance / gridDistance;
+          heightInGrids = templateData.width / gridDistance;
         }
 
         areaInGridSquares = widthInGrids * heightInGrids;
@@ -142,8 +184,9 @@ class AreaMeasurementOverlay {
 
       case "ray":
         // Ray/line: distance * width
-        const lengthInGrids = template.distance / gridDistance;
-        const rayWidthInGrids = (template.width || gridDistance) / gridDistance;
+        const lengthInGrids = templateData.distance / gridDistance;
+        const rayWidthInGrids =
+          (templateData.width || gridDistance) / gridDistance;
         areaInGridSquares = lengthInGrids * rayWidthInGrids;
         break;
 
@@ -153,19 +196,179 @@ class AreaMeasurementOverlay {
 
     // Convert grid squares to square units
     // Each grid square is (gridDistance x gridDistance) in the scene's units
-    const squareUnitsPerGridSquare = Math.pow(gridDistance, 2);
     const totalSquareUnits = areaInGridSquares * squareUnitsPerGridSquare;
 
     return totalSquareUnits;
   }
 
   /**
+   * Count touched grid squares for this template.
+   * Uses Foundry's own highlighted grid positions when available.
+   */
+  static countTouchedGridSquares(template) {
+    const grid = canvas?.grid;
+    const layer = canvas?.templates;
+    if (!grid || !layer) return null;
+
+    try {
+      // Prefer Foundry's internal highlight generation if exposed.
+      if (typeof template?._getGridHighlightPositions === "function") {
+        const positions = template._getGridHighlightPositions();
+        if (Array.isArray(positions)) return positions.length;
+      }
+
+      if (
+        typeof template?.document?._getGridHighlightPositions === "function"
+      ) {
+        const positions = template.document._getGridHighlightPositions();
+        if (Array.isArray(positions)) return positions.length;
+      }
+
+      // Fallback approximation: sample points in each grid cell across template bounds.
+      const gridSize = canvas.scene.grid.size;
+      const bounds = template?.getBounds?.();
+      if (!bounds || !gridSize) return null;
+
+      const minCol = Math.floor(bounds.x / gridSize);
+      const maxCol = Math.floor((bounds.x + bounds.width) / gridSize);
+      const minRow = Math.floor(bounds.y / gridSize);
+      const maxRow = Math.floor((bounds.y + bounds.height) / gridSize);
+
+      let touched = 0;
+      for (let col = minCol; col <= maxCol; col++) {
+        for (let row = minRow; row <= maxRow; row++) {
+          const cellX = col * gridSize;
+          const cellY = row * gridSize;
+          if (this.cellTouchesTemplate(template, cellX, cellY, gridSize)) {
+            touched += 1;
+          }
+        }
+      }
+
+      return touched;
+    } catch (err) {
+      console.warn(
+        "Area Measurement Overlay | Failed touched-square calculation, falling back to geometric area",
+        err
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Approximate whether a grid cell touches a template by sampling points in the cell.
+   */
+  static cellTouchesTemplate(template, cellX, cellY, cellSize) {
+    const shape = template?.shape;
+    const worldTransform = template?.worldTransform;
+    if (!shape || !worldTransform) return false;
+
+    // 5x5 sample grid (corners, center, and intermediates)
+    const divisions = 4;
+    const step = cellSize / divisions;
+    const pt = new PIXI.Point(0, 0);
+
+    for (let ix = 0; ix <= divisions; ix++) {
+      for (let iy = 0; iy <= divisions; iy++) {
+        const worldX = cellX + ix * step;
+        const worldY = cellY + iy * step;
+        pt.set(worldX, worldY);
+        worldTransform.applyInverse(pt, pt);
+        if (shape.contains(pt.x, pt.y)) return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Compute the rendered template shape area in pixels.
+   */
+  static getTemplateShapeAreaPixels(template) {
+    const shape = template?.shape;
+    if (!shape) return 0;
+
+    if (shape instanceof PIXI.Circle) {
+      return Math.PI * Math.pow(shape.radius, 2);
+    }
+
+    if (shape instanceof PIXI.Ellipse) {
+      // PIXI Ellipse stores semi-axes in width/height.
+      return Math.PI * Math.abs(shape.width) * Math.abs(shape.height);
+    }
+
+    if (shape instanceof PIXI.Rectangle) {
+      return Math.abs(shape.width * shape.height);
+    }
+
+    if (shape instanceof PIXI.Polygon) {
+      return this.polygonAreaPixels(shape.points);
+    }
+
+    if (Array.isArray(shape.points)) {
+      return this.polygonAreaPixels(shape.points);
+    }
+
+    return 0;
+  }
+
+  /**
+   * Shoelace formula for polygon area from PIXI point arrays [x1,y1,x2,y2,...]
+   */
+  static polygonAreaPixels(points) {
+    if (!Array.isArray(points) || points.length < 6) return 0;
+    let area2 = 0;
+    const n = Math.floor(points.length / 2);
+
+    for (let i = 0; i < n; i++) {
+      const x1 = points[i * 2];
+      const y1 = points[i * 2 + 1];
+      const j = (i + 1) % n;
+      const x2 = points[j * 2];
+      const y2 = points[j * 2 + 1];
+      area2 += x1 * y2 - x2 * y1;
+    }
+
+    return Math.abs(area2) / 2;
+  }
+
+  /**
    * Calculate how many area units the template covers
    */
   static calculateAreaUnits(template) {
+    const templateData = template?.document ?? template;
     const squareUnits = this.calculateAreaSquareUnits(template);
     const sideLength = game.settings.get(this.MODULE_ID, "squareUnitsPerArea");
     const roundingMode = game.settings.get(this.MODULE_ID, "roundingMode");
+
+    // Cone mode:
+    // 1) Base areas from full distance bands (e.g. 15 units distance = 1 area).
+    // 2) If touched squares around the cone wings accumulate enough to make
+    //    additional full areas, count those too.
+    if (templateData?.t === "cone") {
+      const distance = Math.max(0, Number(templateData.distance ?? 0));
+      if (!sideLength || sideLength <= 0) return 0;
+
+      const baseAreas = Math.floor(distance / sideLength);
+      const gridDistance = Number(canvas?.scene?.grid?.distance ?? 0);
+      const touchedSquares = this.countTouchedGridSquares(template);
+
+      if (
+        Number.isFinite(touchedSquares) &&
+        touchedSquares >= 0 &&
+        gridDistance > 0
+      ) {
+        const squareUnitsPerGridSquare = Math.pow(gridDistance, 2);
+        const squareUnitsPerArea = Math.pow(sideLength, 2);
+        const touchedAreaFloor = Math.floor(
+          (touchedSquares * squareUnitsPerGridSquare) / squareUnitsPerArea
+        );
+
+        return Math.max(baseAreas, touchedAreaFloor);
+      }
+
+      return baseAreas;
+    }
 
     // Side length is already in scene units (e.g., feet)
     // Square it to get the area per unit
@@ -213,7 +416,7 @@ class AreaMeasurementOverlay {
       return;
     }
 
-    const areaUnits = this.calculateAreaUnits(template.document);
+    const areaUnits = this.calculateAreaUnits(template);
     const areaLabel = game.settings.get(this.MODULE_ID, "areaLabel");
     const textColor = game.settings.get(this.MODULE_ID, "textColor");
     const fontSize = game.settings.get(this.MODULE_ID, "fontSize");
