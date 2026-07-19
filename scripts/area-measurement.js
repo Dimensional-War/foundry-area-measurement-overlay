@@ -144,20 +144,15 @@ class AreaMeasurementOverlay {
 
     switch (templateData.t) {
       case "circle":
-        // Circular area: π * r²
+        // Circular area: measured by radius, not geometric area
         const radiusInGrids = templateData.distance / gridDistance;
-        areaInGridSquares = Math.PI * Math.pow(radiusInGrids, 2);
+        areaInGridSquares = radiusInGrids;
         break;
 
       case "cone":
-        // Cone area is a sector of a circle: (angle/360) * π * r²
-        // Default Foundry cone angle is typically 53.13 if unspecified.
+        // Cone area: measured by distance/radius, not geometric area
         const coneRadiusInGrids = templateData.distance / gridDistance;
-        const coneAngle = Number(templateData.angle ?? 53.13);
-        areaInGridSquares =
-          (Math.max(0, coneAngle) / 360) *
-          Math.PI *
-          Math.pow(coneRadiusInGrids, 2);
+        areaInGridSquares = coneRadiusInGrids;
         break;
 
       case "rect":
@@ -340,33 +335,62 @@ class AreaMeasurementOverlay {
     const sideLength = game.settings.get(this.MODULE_ID, "squareUnitsPerArea");
     const roundingMode = game.settings.get(this.MODULE_ID, "roundingMode");
 
-    // Cone mode:
-    // 1) Base areas from full distance bands (e.g. 15 units distance = 1 area).
-    // 2) If touched squares around the cone wings accumulate enough to make
-    //    additional full areas, count those too.
+    // Cone mode: measure by distance/radius, not geometric area
+    // A cone with distance = sideLength should count as 1 area
     if (templateData?.t === "cone") {
       const distance = Math.max(0, Number(templateData.distance ?? 0));
       if (!sideLength || sideLength <= 0) return 0;
 
-      const baseAreas = Math.floor(distance / sideLength);
-      const gridDistance = Number(canvas?.scene?.grid?.distance ?? 0);
-      const touchedSquares = this.countTouchedGridSquares(template);
+      const rawValue = distance / sideLength;
 
-      if (
-        Number.isFinite(touchedSquares) &&
-        touchedSquares >= 0 &&
-        gridDistance > 0
-      ) {
-        const squareUnitsPerGridSquare = Math.pow(gridDistance, 2);
-        const squareUnitsPerArea = Math.pow(sideLength, 2);
-        const touchedAreaFloor = Math.floor(
-          (touchedSquares * squareUnitsPerGridSquare) / squareUnitsPerArea
-        );
-
-        return Math.max(baseAreas, touchedAreaFloor);
+      // Apply rounding mode
+      let result;
+      switch (roundingMode) {
+        case "floor":
+          result = Math.floor(rawValue * 10) / 10;
+          break;
+        case "ceil":
+          result = Math.ceil(rawValue * 10) / 10;
+          break;
+        case "trunc":
+          result = Math.trunc(rawValue);
+          break;
+        case "round":
+        default:
+          result = Math.round(rawValue * 10) / 10;
+          break;
       }
 
-      return baseAreas;
+      return result;
+    }
+
+    // Circle mode: measure by radius, not geometric area
+    // A circle with radius = sideLength should count as 1 area
+    if (templateData?.t === "circle") {
+      const distance = Math.max(0, Number(templateData.distance ?? 0));
+      if (!sideLength || sideLength <= 0) return 0;
+
+      const rawValue = distance / sideLength;
+
+      // Apply rounding mode
+      let result;
+      switch (roundingMode) {
+        case "floor":
+          result = Math.floor(rawValue * 10) / 10;
+          break;
+        case "ceil":
+          result = Math.ceil(rawValue * 10) / 10;
+          break;
+        case "trunc":
+          result = Math.trunc(rawValue);
+          break;
+        case "round":
+        default:
+          result = Math.round(rawValue * 10) / 10;
+          break;
+      }
+
+      return result;
     }
 
     // Side length is already in scene units (e.g., feet)
