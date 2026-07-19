@@ -12,15 +12,11 @@ A Foundry VTT module that displays custom area measurements on templates based o
 
 ## Installation
 
-### Method 1: Manual Installation
+### Method 1: Installation
 
-1. Copy the `area-measurement-overlay` folder to your Foundry VTT modules directory:
-   - Windows: `%localappdata%\FoundryVTT\Data\modules\`
-   - Linux/Mac: `~/.local/share/FoundryVTT/Data/modules/`
+1.  Install from https://github.com/Dimensional-War/foundry-area-measurement-overlay/releases/latest/download/module.json
 
-2. Restart Foundry VTT
-
-3. Enable the module in your world's Module Settings
+2.  Enable the module in your world's Module Settings
 
 ### Method 2: Symlink (Development)
 
