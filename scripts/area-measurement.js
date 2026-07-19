@@ -109,19 +109,12 @@ class AreaMeasurementOverlay {
     const gridSize = canvas.scene.grid.size;
     const gridDistance = canvas.scene.grid.distance;
     const squareUnitsPerGridSquare = Math.pow(gridDistance, 2);
-
-    // Preferred mode: count touched grid squares so overlay matches what users see.
-    const touchedSquares = this.countTouchedGridSquares(template);
-    if (Number.isFinite(touchedSquares) && touchedSquares >= 0) {
-      return touchedSquares * squareUnitsPerGridSquare;
-    }
-
     const sideLength = game.settings.get(this.MODULE_ID, "squareUnitsPerArea");
     const templateData = template?.document ?? template;
 
     // Ray normalization: Foundry defaults ray width to one grid unit. For area-mode
     // workflows, treat default-width rays as "sideLength" thick so a 15' ray maps
-    // to 1 area when sideLength=15.
+    // to 1 area when sideLength=15. This MUST run before touched grid squares check.
     if (templateData?.t === "ray") {
       const rawWidth = Number(templateData.width ?? 0);
       const isDefaultWidth =
@@ -131,6 +124,12 @@ class AreaMeasurementOverlay {
         Math.max(0, Number(templateData.distance ?? 0)) *
         Math.max(0, effectiveWidth)
       );
+    }
+
+    // Preferred mode: count touched grid squares so overlay matches what users see.
+    const touchedSquares = this.countTouchedGridSquares(template);
+    if (Number.isFinite(touchedSquares) && touchedSquares >= 0) {
+      return touchedSquares * squareUnitsPerGridSquare;
     }
 
     // Prefer rendered shape geometry for accurate area on rays, rotated templates,
