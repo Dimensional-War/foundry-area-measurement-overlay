@@ -581,8 +581,40 @@ class AreaMeasurementOverlay {
     const existing = overlays.get(regionId);
     if (existing) {
       existing.parent?.removeChild(existing);
-      existing.destroy();
+      if (!existing.destroyed) existing.destroy();
       overlays.delete(regionId);
+    }
+  }
+
+  /**
+   * Remove every tracked region overlay (destroying the PIXI.Text objects,
+   * not just dropping references), used when tearing down for a new canvas.
+   */
+  static clearAllRegionOverlays() {
+    const overlays = this.getRegionOverlayMap();
+    for (const regionId of Array.from(overlays.keys())) {
+      this.removeRegionOverlay(regionId);
+    }
+  }
+
+  /**
+   * Safety net against orphaned overlays: destroyRegion/deleteRegion don't
+   * always fire for every region (e.g. a cancelled draw-preview, or a region
+   * removed while its scene isn't the active canvas), and since these text
+   * elements live on canvas.controls rather than as children of the Region
+   * itself, an unfired hook leaves a stray label behind permanently. Drop
+   * any tracked overlay whose region is no longer actually on the canvas.
+   */
+  static pruneOrphanedRegionOverlays() {
+    const overlays = this.getRegionOverlayMap();
+    if (!overlays.size) return;
+
+    const liveIds = new Set(
+      (canvas.regions?.placeables ?? []).map(region => region?.objectId).filter(Boolean)
+    );
+
+    for (const regionId of Array.from(overlays.keys())) {
+      if (!liveIds.has(regionId)) this.removeRegionOverlay(regionId);
     }
   }
 
@@ -747,6 +779,19 @@ Hooks.on("refreshMeasuredTemplate", template => {
   AreaMeasurementOverlay.onRenderMeasuredTemplate(template, null);
 });
 
+// Defensive cleanup: an area overlay text is a child of the template itself,
+// so it's normally destroyed along with it, but guard against any case where
+// the template is removed without its display object being torn down first.
+Hooks.on("deleteMeasuredTemplate", document => {
+  const template = document?.object;
+  if (!template?.children) return;
+  const existingAreaText = template.children.find(child => child.areaOverlayText);
+  if (existingAreaText) {
+    template.removeChild(existingAreaText);
+    if (!existingAreaText.destroyed) existingAreaText.destroy();
+  }
+});
+
 // Hook into region refresh/draw to update overlay
 Hooks.on("refreshRegion", region => {
   AreaMeasurementOverlay.onRenderRegion(region);
@@ -779,10 +824,18 @@ Hooks.on("deleteRegion", document => {
 });
 
 Hooks.on("canvasReady", () => {
-  AreaMeasurementOverlay.getRegionOverlayMap().clear();
+  AreaMeasurementOverlay.clearAllRegionOverlays();
   canvas.regions?.placeables.forEach(region => {
     AreaMeasurementOverlay.onRenderRegion(region);
   });
+});
+
+// Backstop: destroyRegion/deleteRegion don't always fire for every region
+// (cancelled draw-previews, undo, etc). Region overlays live outside the
+// Region's own display tree, so a missed hook leaves the label stranded on
+// the canvas forever. Periodically reconcile against the live placeables.
+Hooks.on("sightRefresh", () => {
+  AreaMeasurementOverlay.pruneOrphanedRegionOverlays();
 });
 
 // Hook into control tool changes to update visibility when switching to/from template editing mode
